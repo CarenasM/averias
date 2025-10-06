@@ -8,8 +8,8 @@ EXCEL_FILE = "averias.xlsx"
 SHEET_NAME = "i-SAT"
 PASSWORD = "FuckingM@sta"  # 🔒 Contraseña de acceso
 
-st.set_page_config(page_title="Buscador de Averías Waldner", layout="wide")
-st.title("🔎 Buscador de Averías Waldner")
+st.set_page_config(page_title="Buscador de Averías Waldner SAT", layout="wide")
+st.title("🔎 Buscador de Averías Waldner SAT")
 st.markdown("---")
 
 # =====================
@@ -110,4 +110,5 @@ elif modo == "Por cascada":
                     resultado_final = filtro_df[filtro_df["experiencia"] == experiencia]
                     st.success("🎯 Resultado final:")
                     st.dataframe(resultado_final, use_container_width=True)
+
 
