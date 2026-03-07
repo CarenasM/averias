@@ -77,5 +77,3 @@ if len(texto) > 1:
                 st.write(f"**SOL:** {row['experiencia']}")
     else:
         st.warning("No hay coincidencias")
-
-
