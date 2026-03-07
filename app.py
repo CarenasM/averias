@@ -14,7 +14,7 @@ if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
 
 if not st.session_state["autenticado"]:
-    st.title("Waldner Login")
+    st.title("Averias Waldner")
     pass_input = st.text_input("Contraseña", type="password")
     if st.button("Entrar"):
         if pass_input == PASSWORD:
@@ -77,3 +77,4 @@ if len(texto) > 1:
                 st.write(f"**SOL:** {row['experiencia']}")
     else:
         st.warning("No hay coincidencias")
+
