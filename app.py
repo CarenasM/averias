@@ -15,6 +15,9 @@ if "autenticado" not in st.session_state:
 
 if not st.session_state["autenticado"]:
     st.title("Averias Sat-Waldner")
+    # Firma directamente debajo del título de login
+    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -20px;'>By C@renasM</p>", unsafe_allow_html=True)
+    
     pass_input = st.text_input("Contraseña", type="password")
     if st.button("Entrar"):
         if pass_input == PASSWORD:
@@ -41,6 +44,9 @@ if df is None:
 
 # --- INTERFAZ ---
 st.title("🔎 Waldner SAT")
+# Firma directamente debajo del título principal
+st.markdown("<p style='color: gray; font-size: 14px; margin-top: -20px;'>By C@renasM</p>", unsafe_allow_html=True)
+st.markdown("---") # Una línea divisoria para separar el título del contenido
 
 # MODO CASCADA
 st.subheader("MODO CASCADA")
