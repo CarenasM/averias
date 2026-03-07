@@ -1,118 +1,79 @@
 import streamlit as st
 import pandas as pd
+import os
 
-# =====================
-# CONFIGURACIÓN INICIAL
-# =====================
+# --- CONFIGURACIÓN ---
 EXCEL_FILE = "averias.xlsx"
 SHEET_NAME = "i-SAT"
-PASSWORD = "FuckingM@sta"  # 🔒 Contraseña de acceso
+PASSWORD = "FuckingM@sta"
 
-st.set_page_config(page_title="Buscador de Averías Waldner SAT", layout="wide")
+st.set_page_config(page_title="Waldner SAT - Buscador Final", layout="centered")
 
-# 🧭 Título y autor
-st.title("🔎 Buscador de Averías Waldner SAT")
-st.markdown(
-    "<p style='color:gray; font-size:14px;'>By <b>C@renasM</b></p>",
-    unsafe_allow_html=True
-)
-st.markdown("---")
-
-# =====================
-# FUNCIÓN DE CARGA DE DATOS
-# =====================
-@st.cache_data
-def cargar_datos():
-    df = pd.read_excel(EXCEL_FILE, sheet_name=SHEET_NAME)
-    df.columns = df.columns.str.strip().str.lower()
-    return df
-
-# =====================
-# BLOQUEO POR CONTRASEÑA
-# =====================
+# --- LOGIN ---
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
 
 if not st.session_state["autenticado"]:
-    st.subheader("🔐 Acceso restringido")
-    password_input = st.text_input("Introduce la contraseña:", type="password")
+    st.title("Waldner Login")
+    pass_input = st.text_input("Contraseña", type="password")
     if st.button("Entrar"):
-        if password_input == PASSWORD:
+        if pass_input == PASSWORD:
             st.session_state["autenticado"] = True
-            st.success("✅ Acceso concedido. Bienvenido.")
             st.rerun()
         else:
-            st.error("❌ Contraseña incorrecta.")
-    st.stop()  # 🔒 Detiene la ejecución si no está autenticado
-
-# =====================
-# CARGA DE DATOS
-# =====================
-try:
-    df = cargar_datos()
-    st.success("Archivo cargado correctamente ✅")
-except Exception as e:
-    st.error(f"❌ Error al cargar el archivo '{EXCEL_FILE}': {e}")
+            st.error("Incorrecto")
     st.stop()
 
-# =====================
-# SELECTOR DE MODO
-# =====================
-modo = st.radio(
-    "Elige el método de búsqueda:",
-    ["Por palabra clave (síntoma)", "Por cascada"],
-    index=0,
-    horizontal=True
-)
+# --- CARGA DE DATOS ---
+@st.cache_data
+def cargar_datos():
+    if not os.path.exists(EXCEL_FILE):
+        return None
+    df = pd.read_excel(EXCEL_FILE, sheet_name=SHEET_NAME)
+    df.columns = [c.strip().lower() for c in df.columns]
+    return df.astype(str)
 
-st.markdown("---")
+df = cargar_datos()
 
-# =====================
-# MODO 1: PALABRA CLAVE
-# =====================
-if modo == "Por palabra clave (síntoma)":
-    palabra = st.text_input(
-        "Escribe una palabra clave para buscar en la columna 'sintoma':",
-        placeholder="Ej: error, sensor, ventilador..."
-    )
+if df is None:
+    st.error(f"Error: No se halla {EXCEL_FILE}")
+    st.stop()
 
-    if palabra:
-        resultados = df[df["sintoma"].str.contains(palabra, case=False, na=False)]
-        if not resultados.empty:
-            st.success(f"🔹 Se encontraron {len(resultados)} coincidencias para '{palabra}':")
-            st.dataframe(resultados, use_container_width=True)
-        else:
-            st.warning("No se encontraron coincidencias.")
+# --- INTERFAZ ---
+st.title("🔎 Waldner SAT")
 
-# =====================
-# MODO 2: CASCADA
-# =====================
-elif modo == "Por cascada":
-    def get_options(df_filtered, column_name):
-        options = [c for c in df_filtered[column_name].unique().tolist() if c]
-        return sorted(options)
+# MODO CASCADA
+st.subheader("MODO CASCADA")
+controladores = sorted(df["controlador"].unique())
+controlador = st.selectbox("1. Selecciona Controlador:", [""] + controladores)
 
-    controladores = get_options(df, "controlador")
-    controlador = st.selectbox("1️⃣ Selecciona Controlador:", [""] + controladores)
+if controlador:
+    df_m = df[df["controlador"] == controlador]
+    modelos = sorted(df_m["modelo"].unique())
+    modelo = st.selectbox("2. Selecciona Modelo:", [""] + modelos)
+    
+    if modelo:
+        df_s = df_m[df_m["modelo"] == modelo]
+        sintomas = sorted(df_s["sintoma"].unique())
+        sintoma = st.selectbox("3. Selecciona Síntoma:", [""] + sintomas)
+        
+        if sintoma:
+            res = df_s[df_s["sintoma"] == sintoma]
+            for _, row in res.iterrows():
+                st.success(f"**SOLUCIÓN:**\n\n{row['experiencia']}")
 
-    filtro_df = df.copy()
+st.divider()
 
-    if controlador:
-        filtro_df = filtro_df[filtro_df["controlador"] == controlador]
-        modelos = get_options(filtro_df, "modelo")
-        modelo = st.selectbox("2️⃣ Selecciona Modelo:", [""] + modelos)
+# BUSCADOR LIBRE
+st.subheader("BUSCADOR LIBRE")
+texto = st.text_input("Buscador Rápido (palabra clave)")
 
-        if modelo:
-            filtro_df = filtro_df[filtro_df["modelo"] == modelo]
-            sintomas = get_options(filtro_df, "sintoma")
-            sintoma = st.selectbox("3️⃣ Selecciona Síntoma:", [""] + sintomas)
-
-            if sintoma:
-                filtro_df = filtro_df[filtro_df["sintoma"] == sintoma]
-                experiencias = get_options(filtro_df, "experiencia")
-                experiencia = st.selectbox("4️⃣ Selecciona Experiencia/Solución:", [""] + experiencias)
-
-                if experiencia:
-                    resultado_final = filtro_df[filtro_df["experiencia"] == experiencia]
-                    st.success("🎯 Resultado final:")
-                    st.dataframe(resultado_final, use_container_width=True)
+if len(texto) > 1:
+    mask = df["sintoma"].str.contains(texto, case=False, na=False)
+    resultados = df[mask].head(5)
+    if not resultados.empty:
+        for _, row in resultados.iterrows():
+            with st.expander(f"• {row['sintoma'].upper()}"):
+                st.write(f"**SOL:** {row['experiencia']}")
+    else:
+        st.warning("No hay coincidencias")
