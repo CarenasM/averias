@@ -8,7 +8,7 @@ PASSWORD = "FuckingM@sta"
 
 st.set_page_config(page_title="Waldner SAT - Buscador Final", layout="centered")
 
-# --- SELECTOR DE IDIOMA (Antes del Login) ---
+# --- SELECTOR DE IDIOMA ---
 if "idioma" not in st.session_state:
     st.session_state["idioma"] = None
 
@@ -26,7 +26,7 @@ if st.session_state["idioma"] is None:
             st.rerun()
     st.stop()
 
-# --- DICCIONARIO DE TRADUCCIÓN Y COLUMNAS ---
+# --- DICCIONARIO DE TRADUCCIÓN ---
 if st.session_state["idioma"] == "es":
     CONF = {
         "sheet": "i-SAT",
@@ -97,21 +97,22 @@ if not st.session_state["autenticado"]:
 
 # --- CARGA DE DATOS ---
 @st.cache_data
-def cargar_datos(pestana):
-    if not os.path.exists(EXCEL_FILE):
-        return None
+def cargar_datos(sheet):
+    if not os.path.exists(EXCEL_FILE): return None
     try:
-        df = pd.read_excel(EXCEL_FILE, sheet_name=pestana)
+        df = pd.read_excel(EXCEL_FILE, sheet_name=sheet)
+        # Limpieza de nombres de columnas
         df.columns = [c.strip().lower() for c in df.columns]
+        # Limpieza de espacios en todo el contenido de texto del Excel
+        df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
         return df.astype(str)
-    except:
-        return None
+    except: return None
 
 df = cargar_datos(CONF["sheet"])
 
 if df is None:
-    st.error(f"Error: No se halla la pestaña {CONF['sheet']} en {EXCEL_FILE}")
-    if st.button("Volver / Back"):
+    st.error(f"Error: Sheet '{CONF['sheet']}' not found in {EXCEL_FILE}")
+    if st.button("Reset"):
         st.session_state["idioma"] = None
         st.rerun()
     st.stop()
@@ -123,23 +124,28 @@ st.markdown("---")
 
 # MODO CASCADA
 st.subheader(CONF["cascada_t"])
-controladores = sorted(df[CONF["col_c"]].unique())
-controlador = st.selectbox(CONF["sel_c"], [""] + controladores)
+ctrls = sorted(df[CONF["col_c"]].unique())
+sel_ctrl = st.selectbox(CONF["sel_c"], [""] + ctrls)
 
-if controlador:
-    df_m = df[df[CONF["col_c"]] == controlador]
-    modelos = sorted(df_m[CONF["col_m"]].unique())
-    modelo = st.selectbox(CONF["sel_m"], [""] + modelos)
+if sel_ctrl:
+    df_m = df[df[CONF["col_c"]] == sel_ctrl]
+    mods = sorted(df_m[CONF["col_m"]].unique())
+    sel_mod = st.selectbox(CONF["sel_m"], [""] + mods)
     
-    if modelo:
-        df_s = df_m[df_m[CONF["col_m"]] == modelo]
-        sintomas = sorted(df_s[CONF["col_s"]].unique())
-        sintoma = st.selectbox(CONF["sel_s"], [""] + sintomas)
+    if sel_mod:
+        df_s = df_m[df_m[CONF["col_m"]] == sel_mod]
+        sints = sorted(df_s[CONF["col_s"]].unique())
+        sel_sint = st.selectbox(CONF["sel_s"], [""] + sints)
         
-        if sintoma:
-            res = df_s[df_s[CONF["col_s"]] == sintoma]
-            for _, row in res.iterrows():
-                st.success(f"**{CONF['sol_t']}:**\n\n{row[CONF['col_e']]}")
+        if sel_sint:
+            # Filtramos todas las filas que coinciden
+            res = df_s[df_s[CONF["col_s"]] == sel_sint]
+            
+            # Obtenemos soluciones únicas para evitar las 2 repetidas que mencionas
+            soluciones_unicas = res[CONF["col_e"]].unique()
+            
+            for i, sol in enumerate(soluciones_unicas, 1):
+                st.success(f"**{CONF['sol_t']} #{i}:**\n\n{sol}")
 
 st.divider()
 
@@ -149,7 +155,9 @@ texto = st.text_input(CONF["place_h"])
 
 if len(texto) > 1:
     mask = df[CONF["col_s"]].str.contains(texto, case=False, na=False)
-    resultados = df[mask].head(5)
+    # Aquí también aplicamos unique() por si el buscador rápido arroja duplicados
+    resultados = df[mask].drop_duplicates(subset=[CONF["col_e"]]).head(5)
+    
     if not resultados.empty:
         for _, row in resultados.iterrows():
             with st.expander(f"• {row[CONF['col_s']].upper()}"):
@@ -157,7 +165,7 @@ if len(texto) > 1:
     else:
         st.warning(CONF["no_res"])
 
-# BOTÓN DE SALIDA EN LA BARRA LATERAL
+# BOTÓN EN LA BARRA LATERAL
 if st.sidebar.button("Logout / Change Language"):
     st.session_state["autenticado"] = False
     st.session_state["idioma"] = None
