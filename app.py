@@ -6,8 +6,9 @@ from datetime import datetime
 # --- CONFIGURACIÓN ---
 EXCEL_FILE = "averias.xlsx"
 LOG_FILE = "log.txt"
-PASS_USER = "FuckingM@sta"
-PASS_ADMIN = "AdminSAT" # <--- Cambia esta por la que tú quieras
+# Ahora el código busca las contraseñas en el panel de Secrets de Streamlit
+PASS_USER = st.secrets["PASS_USER"]
+PASS_ADMIN = st.secrets["PASS_ADMIN"] # <--- Cambia esta por la que tú quieras
 
 st.set_page_config(page_title="Waldner SAT - Buscador Final", layout="centered")
 
