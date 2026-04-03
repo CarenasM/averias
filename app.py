@@ -4,7 +4,6 @@ import os
 from datetime import datetime
 
 # --- CONFIGURACIÓN SEGURA (SECRETS) ---
-# Recuerda configurar PASS_USER y PASS_ADMIN en el panel de Settings > Secrets de Streamlit Cloud
 EXCEL_FILE = "averias.xlsx"
 LOG_FILE = "log.txt"
 
@@ -13,12 +12,11 @@ try:
     PASS_ADMIN = st.secrets["PASS_ADMIN"]
 except Exception:
     st.error("⚠️ Configuración de Seguridad: No se han encontrado los 'Secrets' en Streamlit Cloud.")
-    st.info("Ve a Settings > Secrets en tu panel de Streamlit y añade PASS_USER y PASS_ADMIN")
     st.stop()
 
 st.set_page_config(page_title="Waldner SAT - Buscador Final", layout="centered")
 
-# --- FUNCIONES DE LOG (CONTADOR) ---
+# --- FUNCIONES DE LOG ---
 def registrar_acceso():
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
@@ -114,24 +112,24 @@ if st.session_state["es_admin"]:
         st.rerun()
     st.stop()
 
-# --- CARGA DE DATOS ANTIBALAS ---
+# --- CARGA DE DATOS (Arreglado para compatibilidad con Pandas 2.1+) ---
 @st.cache_data
 def cargar_datos(sheet_name):
     if not os.path.exists(EXCEL_FILE):
-        st.error(f"❌ No se encuentra el archivo '{EXCEL_FILE}'")
         return None
     try:
         xls = pd.ExcelFile(EXCEL_FILE, engine='openpyxl')
         if sheet_name not in xls.sheet_names:
-            st.error(f"❌ La hoja '{sheet_name}' no existe. Disponibles: {xls.sheet_names}")
             return None
         
         df = pd.read_excel(xls, sheet_name=sheet_name)
-        # Limpieza de nombres de columnas a minúsculas y sin espacios
         df.columns = [str(c).strip().lower() for c in df.columns]
-        # Forzamos que todo sea texto y quitamos vacíos (evita errores de ordenación)
         df = df.fillna("").astype(str)
-        df = df.applymap(lambda x: x.strip())
+        # Cambio crítico: Usamos .map en lugar de .applymap
+        if hasattr(df, 'map'):
+            df = df.map(lambda x: x.strip())
+        else:
+            df = df.applymap(lambda x: x.strip())
         return df
     except Exception as e:
         st.error(f"❌ Error al leer Excel: {e}")
@@ -140,6 +138,7 @@ def cargar_datos(sheet_name):
 df = cargar_datos(CONF["sheet"])
 
 if df is None:
+    st.error(f"❌ No se pudo cargar la hoja '{CONF['sheet']}' del archivo {EXCEL_FILE}")
     st.stop()
 
 # --- INTERFAZ BUSCADOR ---
@@ -150,10 +149,9 @@ st.markdown("---")
 # MODO CASCADA
 st.subheader(CONF["cascada_t"])
 
-# Función para limpiar y ordenar opciones de los selectores
 def obtener_opciones_limpias(dataframe, columna):
     if columna not in dataframe.columns: return []
-    # Obtenemos valores únicos, convertimos a string y quitamos vacíos
+    # Convertimos a texto y filtramos nulos/vacíos para evitar errores en sorted()
     vals = [str(v).strip() for v in dataframe[columna].unique() if str(v).strip() != ""]
     return sorted(vals)
 
@@ -172,7 +170,6 @@ if sel_ctrl:
         
         if sel_sint:
             res = df_s[df_s[CONF["col_s"]] == sel_sint]
-            # Muestra soluciones únicas (elimina las repetidas del Excel)
             soluciones_unicas = res[CONF["col_e"]].unique()
             for i, sol in enumerate(soluciones_unicas, 1):
                 st.success(f"**{CONF['sol_t']} #{i}:**\n\n{sol}")
@@ -185,7 +182,6 @@ texto = st.text_input(CONF["place_h"])
 
 if len(texto) > 1:
     mask = df[CONF["col_s"]].str.contains(texto, case=False, na=False)
-    # Eliminamos duplicados también en búsqueda libre
     resultados = df[mask].drop_duplicates(subset=[CONF["col_e"]]).head(5)
     
     if not resultados.empty:
@@ -195,7 +191,6 @@ if len(texto) > 1:
     else:
         st.warning(CONF["no_res"])
 
-# BOTÓN LOGOUT
 if st.sidebar.button("Logout / Salir"):
     st.session_state["autenticado"] = False
     st.session_state["es_admin"] = False
