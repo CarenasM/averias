@@ -7,17 +7,17 @@ from datetime import datetime
 EXCEL_FILE = "averias.xlsx"
 LOG_FILE = "log.txt"
 
-# Las contraseñas se leen del panel de Streamlit Cloud
+# Intentamos leer las contraseñas de los Secrets de Streamlit
 try:
     PASS_USER = st.secrets["PASS_USER"]
     PASS_ADMIN = st.secrets["PASS_ADMIN"]
-except:
-    st.error("Error: No se han configurado los Secrets en Streamlit Cloud.")
+except Exception:
+    st.error("⚠️ Configuración incompleta: No se han encontrado los 'Secrets' en el panel de Streamlit Cloud.")
     st.stop()
 
 st.set_page_config(page_title="Waldner SAT - Buscador Final", layout="centered")
 
-# --- FUNCIONES DE LOG ---
+# --- FUNCIONES DE LOG (CONTADOR) ---
 def registrar_acceso():
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(LOG_FILE, "a") as f:
@@ -28,7 +28,7 @@ def obtener_visitas():
         return 0, "No hay registros aún"
     with open(LOG_FILE, "r") as f:
         lineas = f.readlines()
-        return len(lineas), lineas[-1] if lineas else "Sin accesos"
+        return len(lineas), lineas[-1].strip() if lineas else "Sin accesos"
 
 # --- SELECTOR DE IDIOMA ---
 if "idioma" not in st.session_state:
@@ -98,11 +98,11 @@ if not st.session_state["autenticado"] and not st.session_state["es_admin"]:
 
 # --- VISTA ADMIN ---
 if st.session_state["es_admin"]:
-    st.title("📊 Panel Admin")
+    st.title("📊 Panel de Control (Admin)")
     total, ultimo = obtener_visitas()
-    st.metric("Accesos Totales", total)
-    st.write(f"Último acceso: {ultimo}")
-    if st.button("Cerrar"):
+    st.metric("Total de Accesos Técnicos", total)
+    st.info(f"Última conexión registrada: {ultimo}")
+    if st.button("Cerrar Panel / Volver"):
         st.session_state["es_admin"] = False
         st.rerun()
     st.stop()
@@ -113,38 +113,53 @@ def cargar_datos(sheet):
     if not os.path.exists(EXCEL_FILE): return None
     try:
         df = pd.read_excel(EXCEL_FILE, sheet_name=sheet)
-        df.columns = [c.strip().lower() for c in df.columns]
-        # RELLENAMOS VACÍOS Y CONVERTIMOS A TEXTO
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        # Forzamos que TODO sea texto y quitamos vacíos
         df = df.fillna("").astype(str)
         df = df.applymap(lambda x: x.strip())
         return df
-    except: return None
+    except Exception:
+        return None
 
 df = cargar_datos(CONF["sheet"])
 
-# --- INTERFAZ ---
+if df is None:
+    st.error(f"Error: No se pudo cargar la hoja '{CONF['sheet']}' del archivo {EXCEL_FILE}")
+    st.stop()
+
+# --- INTERFAZ BUSCADOR ---
 st.title(CONF["main_t"])
 st.markdown("<p style='color: gray; font-size: 14px; margin-top: -20px;'>By C@renasM</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 # MODO CASCADA
 st.subheader(CONF["cascada_t"])
-# SOLUCIÓN AL ERROR: Filtramos valores vacíos antes de ordenar
-ctrls = sorted([c for c in df[CONF["col_c"]].unique() if c])
+
+# --- Lógica de limpieza para selectores (Evita el TypeError de sorted) ---
+def obtener_opciones(dataframe, columna):
+    raw_vals = dataframe[columna].unique()
+    # Convertimos a string, limpiamos y quitamos vacíos antes de ordenar
+    clean_vals = [str(v).strip() for v in raw_vals if str(v).strip() != ""]
+    return sorted(clean_vals)
+
+ctrls = obtener_opciones(df, CONF["col_c"])
 sel_ctrl = st.selectbox(CONF["sel_c"], [""] + ctrls)
 
 if sel_ctrl:
     df_m = df[df[CONF["col_c"]] == sel_ctrl]
-    mods = sorted([m for m in df_m[CONF["col_m"]].unique() if m])
+    mods = obtener_opciones(df_m, CONF["col_m"])
     sel_mod = st.selectbox(CONF["sel_m"], [""] + mods)
+    
     if sel_mod:
         df_s = df_m[df_m[CONF["col_m"]] == sel_mod]
-        sints = sorted([s for s in df_s[CONF["col_s"]].unique() if s])
+        sints = obtener_opciones(df_s, CONF["col_s"])
         sel_sint = st.selectbox(CONF["sel_s"], [""] + sints)
+        
         if sel_sint:
             res = df_s[df_s[CONF["col_s"]] == sel_sint]
-            soluciones = res[CONF["col_e"]].unique()
-            for i, sol in enumerate(soluciones, 1):
+            # Filtramos para que soluciones idénticas solo se vean una vez
+            soluciones_unicas = res[CONF["col_e"]].unique()
+            for i, sol in enumerate(soluciones_unicas, 1):
                 st.success(f"**{CONF['sol_t']} #{i}:**\n\n{sol}")
 
 st.divider()
@@ -152,16 +167,20 @@ st.divider()
 # BUSCADOR LIBRE
 st.subheader(CONF["libre_t"])
 texto = st.text_input(CONF["place_h"])
+
 if len(texto) > 1:
     mask = df[CONF["col_s"]].str.contains(texto, case=False, na=False)
     resultados = df[mask].drop_duplicates(subset=[CONF["col_e"]]).head(5)
+    
     if not resultados.empty:
         for _, row in resultados.iterrows():
             with st.expander(f"• {row[CONF['col_s']].upper()}"):
                 st.write(f"**SOL:** {row[CONF['col_e']]}")
-    else: st.warning(CONF["no_res"])
+    else:
+        st.warning(CONF["no_res"])
 
-if st.sidebar.button("Logout"):
+# BOTÓN LOGOUT EN LATERAL
+if st.sidebar.button("Logout / Salir"):
     st.session_state["autenticado"] = False
     st.session_state["es_admin"] = False
     st.session_state["idioma"] = None
